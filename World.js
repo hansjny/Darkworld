@@ -91,6 +91,10 @@ var Map = {
 	}
 }
 
+var gameState = {
+
+
+}
 var Darkworld = {
 	mainChar: null,
 	scale: 0,
@@ -108,11 +112,8 @@ var Darkworld = {
 		squaresY: 0,
 	},
 	gameState: {
-		isMoving: false,
 		offsetX: 0, //Extra anim steps X
 		offsetY: 0, //Extra anim steps Y
-		nearEdgeX: false,
-		nearEdgeY: false,
 		mouse: {x: 0, y: 0},
 
 	},
@@ -125,28 +126,18 @@ var Darkworld = {
 		this.canvas.height = this.gameSettings.viewHeight * this.scale;
 		this.context = this.canvas.getContext("2d");
 		document.body.insertBefore(this.canvas, document.body.childNodes[0]);
-		//this.scale = 1
 		this.gameSettings.squareSize = this.gameSettings.gridSize * this.scale;
 		this.gameSettings.squaresX = this.canvas.width / this.gameSettings.squareSize;
 		this.gameSettings.squaresY = this.canvas.height / this.gameSettings.squareSize;
-
-		console.log(this.canvas.width, this.gameSettings.squaresX)
 		this.gameSettings.centerX = Math.floor(this.gameSettings.squaresX / 2)
 		this.gameSettings.centerY = Math.floor(this.gameSettings.squaresY / 2)
-
 		this.canvas.onmousemove = this.mouseMove
-		this.frameNo = 0;
+
 		Map.generateMap()
-		this.mainChar = new unit(PlayerConfig.width, PlayerConfig.height, PlayerConfig.color,
-		this.gameSettings.centerX, this.gameSettings.centerY, "player");
-		testUnit1 = new unit(80, 80, "red", 20, 20, "enemy");
-		testUnit2 = new unit(this.gameSettings.gridSize, this.gameSettings.gridSize,"green", 3, 2, "enemy");
-		testUnit3 = new unit(this.gameSettings.gridSize, this.gameSettings.gridSize,"green", 5, 17, "enemy");
-		testUnit4 = new unit(this.gameSettings.gridSize, this.gameSettings.gridSize,"green", 15, 13, "enemy");
-		Map.placeUnit(testUnit1);
-		Map.placeUnit(testUnit2);
-		Map.placeUnit(testUnit3);
-		Map.placeUnit(testUnit4);
+
+		this.mainChar = new player(PlayerConfig.width, PlayerConfig.height, PlayerConfig.color,
+		this.gameSettings.centerX, this.gameSettings.centerY);
+
 		this.drawWorld();
 		addListeners();
 		this.interval = setInterval(gameLoop, 1000/this.gameSettings.fps);
@@ -201,10 +192,6 @@ var Darkworld = {
 			y : Math.floor(y / this.gameSettings.squareSize)
 		});
 	},
-	update : function() {
-		this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-		this.drawWorld(this.mainChar.x, this.mainChar.y);
-	},
 	mouseMove: function(evt) {
 		var rect = Darkworld.canvas.getBoundingClientRect();
 		x =  evt.clientX - rect.left,
@@ -229,6 +216,10 @@ var Darkworld = {
 		else if (x + centerX > Map.width) {
 			Darkworld.mainChar.screenPosX = centerX + (centerX - (Map.width - x));
 		}
+	},
+	update : function() {
+		this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+		this.drawWorld(this.mainChar.x, this.mainChar.y);
 	}
 }
 
@@ -241,7 +232,6 @@ function playerMove() {
 	yDiff = mouse.y - playerY
 	if (0 == yDiff && xDiff ==  0)
 		return
-
 	
 	if (Math.abs(yDiff) > Math.abs(xDiff)) {
 		if (yDiff > 0) {
@@ -268,15 +258,6 @@ function playerMove() {
 		}
 
 	}
-	/*if (Interaction.left)
-		Darkworld.mainChar.moveLeft()
-	if (Interaction.right)
-		Darkworld.mainChar.moveRight()
-	if (Interaction.down)
-		Darkworld.mainChar.moveDown()
-	if (Interaction.up)
-		Darkworld.mainChar.moveUp()
-	*/
 }
 
 function gameLoop() {
@@ -285,23 +266,31 @@ function gameLoop() {
 		playerMove();
 	}
 	Darkworld.update()
-	Darkworld.frameno++;
+	drawMouseHover()	
+	
 }
 
-function unit( width, height, color, x, y, type) {
-	this.type = type;
-	this.hp = 100;
-	this.color = color;
-	this.mana = 30;
-	this.exp = 0;
+function drawMouseHover() {
+	var mouse = Darkworld.gameState.mouse; 
+	Darkworld.context.fillStyle = "yellow";
+	Darkworld.context.globalAlpha = 0.4;
+	Darkworld.context.fillRect(
+		Darkworld.pos(mouse.x),
+		Darkworld.pos(mouse.y),
+		Darkworld.gameSettings.squareSize,
+		Darkworld.gameSettings.squareSize);	
+	Darkworld.context.globalAlpha = 1;
+}
+
+function player( width, height, color, x, y) {
 	this.width = width;
 	this.height = height;
-	this.moveSpeed = 3; // Move speed 1000 sec / 10
+	this.moveSpeed = 0.8; // Move speed 1000 sec / 10
 	this.x = x;
 	this.y = y;
-	this.ctx = Darkworld.context;
 
-	//Animation Stuff
+	//Walk animation Stuff
+	this.ctx = Darkworld.context;
 	this.isMoving = false;
 	this.framesMoved = 0;
 	this.moveFrames = 0;
@@ -318,7 +307,8 @@ function unit( width, height, color, x, y, type) {
 	this.frameUp = 0;
 	this.frameLine = 0;
 	this.first = true;
-	this.ticksPerFrame = 4;
+	this.lastFrame = 0;
+	this.ticksPerFrame = 14 - Math.round(this.moveSpeed*this.moveSpeed / 10);
 	this.tickCount = 0;
 	this.move = null;
 
@@ -330,17 +320,7 @@ function unit( width, height, color, x, y, type) {
 	}
 
 	this.update = function(x, y) {
-		if (this.type == "player") {
-			this.moveAnimation(x, y);	
-		}
-		else {
-			this.ctx.fillStyle = this.color;
-			this.ctx.fillRect(
-					Darkworld.pos(x) + Darkworld.gameState.offsetX * -1,
-					Darkworld.pos(y) + Darkworld.gameState.offsetY * -1,
-					Darkworld.size(this.width),
-					Darkworld.size(this.height));	
-		}
+		this.moveAnimation(x, y);	
 	}
 	
 	this.preventWalkJerkX = function() {
@@ -409,7 +389,6 @@ function unit( width, height, color, x, y, type) {
 			if (this.moveFrames == 0 ) {
 				this.x = this.x + this.xSpeed;
 				this.y = this.y + this.ySpeed;
-				this.frameIndex = 0;
 				this.resetMove()
 			}
 		}
@@ -435,7 +414,6 @@ function unit( width, height, color, x, y, type) {
 		}
 
 	this.resetMove = function() {
-		this.frameIndex = 0;
 		this.framesMoved = 0;
 		this.moveFrames = 0
 		this.isMoving = false;
@@ -450,7 +428,6 @@ function unit( width, height, color, x, y, type) {
 		this.ySpeed = ySpeed;
 		this.moveFrames = Math.round((1000 / this.moveSpeed) / (1000 / Darkworld.gameSettings.fps))
 		this.frameUp = Math.round(this.moveFrames / this.frameCount);
-		this.ticksPerFrame = this.frameUp;
 		this.xStep = ((Darkworld.gameSettings.squareSize) / this.moveFrames) * xSpeed;
 		this.yStep = ((Darkworld.gameSettings.squareSize) / this.moveFrames) * ySpeed;
 	}
